@@ -167,6 +167,8 @@ def training(X_train, Y_train, list_of_layer_sizes, epochs, LR, LRdecay=True, ac
        Parameter list: X_ an Y_train is training data, list_of_layer_sizes
        contains sizes of ALL layers including input and output. ...
            """
+           
+           #TODO!!! add possibility of inputting weights, so you cand do additional trainng on pretrained weights!
     #parameter setting
     actAndLossDict = {'relu':(relu, reluPrime), 'sigmoid':(sigmoid, sigmoidPrime), 'softmax':(softmax, softmaxPrime), 'MSE': (MSELoss, MSELossPrime), 'cce':(CategoricalCrossEntropy, CategoricalCrossEntropyPrime)}
     (activationFun, activationFunPrime) = actAndLossDict[activationFun]
@@ -183,8 +185,8 @@ def training(X_train, Y_train, list_of_layer_sizes, epochs, LR, LRdecay=True, ac
    
     
     #setup for batch learning
-    L = len(X_train)
-    batch_size = 1 ## change this if you want batches
+    L = int(len(X_train)/30)
+    batch_size = 30 ## change this if you want batches
     batches = L #==len(X_train),  change this if you want batches
     #
     for ep in range(epochs):
@@ -199,10 +201,8 @@ def training(X_train, Y_train, list_of_layer_sizes, epochs, LR, LRdecay=True, ac
         for btch in range(batches):
             #setup for batch learning, wont do anything if learning per image
             x_batchtrain = X_train[batch_size*btch : min(batch_size*btch + batch_size, L)] #without batch learning, this will give only 1 image every time
-            #
-            ##DEBUGGING
-            #print(batch_size*btch, "  to  ", min(batch_size*btch + batch_size, L), "\n")
-            ##########
+            
+            batch_updates = [0 for i in range(N-1)] 
             for im in x_batchtrain: #now go through all the images in this batch... 
                 #first propagate forward, save intermediate inputs (before activ. function):
                 origInput = (im.flatten()/255).reshape(-1,1)
@@ -216,17 +216,23 @@ def training(X_train, Y_train, list_of_layer_sizes, epochs, LR, LRdecay=True, ac
                 loss = loss + lossFun(finalOut, origInput)
                 #for proper batch learning: add backprop/update based on average loss or sth?  Herregud
                 #the backprop in that case probably needs to be put outside the batch processing... skiten
-                #TODO
-                #how does batch learning really work för fan?!
-                #print(lossFun(finalOut, origInput))
+                #TODO - I think it should be like this:
+                upd = 0
+                for i in zip(batch_updates, updates):
+                    batch_updates[upd] = sum(i)
+                    upd = upd+1
+            #now se avg updates for each weight?
+            updates = [ bbuu/batch_size for bbuu in batch_updates] ## TODO: you're not supposed to justdivide by batch size,sinze last batch might be smaller
+            #how does batch learning really work för fan?!
+            #print(lossFun(finalOut, origInput))
     
             #now backprop step is done, update the weights for this batch :)
-            if LRdecay and (ep+1)%25==0:
+            if LRdecay and (ep+1)%10==0:
                 LR = LR*0.5
             weights = update_weights(weights, updates, LR)
             #print("weights updated for: (", np.min([np.min(updt) for updt in updates]), ", ", np.max([np.max(updt) for updt in updates]), ") \n" )
         
-        epoch_losses[ep] = (loss/L)
+        epoch_losses[ep] = (loss/len(X_train))
         #save results from this epoch
         if save:
             f = open('weights{0}.pckl'.format(ep), 'wb')
@@ -304,7 +310,7 @@ def plotExamples(trueOut, myOut, loss, howmany, showloss=True, save=False):
 
 
 
-
+finalWeights=training(a_train, b_train, [784,250,100,250,784], 30, 1)
 
 
 
