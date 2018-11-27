@@ -80,10 +80,10 @@ def initializeWeights(weightsfrom, weightsto, method = 'uniform'):
     """randomly initializes weights, returns them
        in a matrix of size weightsfrom x weightsto.
        Type of initialization is decided by method 
-       parameter: uniform, Xavier"""
+       parameter: uniform, normal, Xavier"""
     if method == "uniform":
         return np.random.uniform(size = (weightsto, weightsfrom))
-    elif method == "Xavier":
+    elif method == "normal":
         return np.random.normal(0,1,size=(weightsto, weightsfrom))/np.sqrt(weightsto+weightsfrom)
     raise NameError('Method not recognized')
            
@@ -100,10 +100,10 @@ def update_weights(w, w_up, learningRate):
        using a learning rate learningRate...GD."""
     new = list()
     for wi, wi_up in zip(w, w_up):
-        #wi_up = wi_up/np.maximum(np.max(wi_up), 1)
+        #wi_up = (wi_up - np.mean(wi_up))/np.std(wi_up)
+        wi_up = wi_up/np.maximum(np.max(wi_up), 1)
         wi = wi-wi_up*learningRate
         #instead of normal. update, normalize final weights.
-        wi = (wi - np.mean(wi))/np.std(wi)
         new.append(wi)
     return tuple(new)
 
@@ -160,15 +160,20 @@ def backpropagate(truth, out, forwardPasses, weights, lossPrime=MSELossPrime, ac
 #learningRate = 0.2
 
 
-def training(X_train, Y_train, list_of_layer_sizes, epochs, LR, LRdecay=True, activationFun='relu', lastActivation='relu', Loss='MSE', initial='Xavier', save=True, verbose=True):
+def training(X_train, Y_train, list_of_layer_sizes, epochs, batch_size, LR, LRdecay=True, activationFun='relu', lastActivation='relu', Loss='MSE', initial='normal', save=True, verbose=True):
     """main function for the training. Does forward pass and backprop.
-       Does batch training if desired (TODO). Saves weights every epoch
+       Does batch training if desired. Saves weights every epoch
        and prints losses. 
        Parameter list: X_ an Y_train is training data, list_of_layer_sizes
-       contains sizes of ALL layers including input and output. ...
-           """
+       contains sizes of ALL layers including input and output. epochs holds 
+       number of epoch for training (no early stopping possible!), batch_size 
+       is chosen batch size: currently the num.of training samples needs to be 
+       A MULTIPLE OF the batchs size! Use batch_size=1 for normal (no batch 
+       training) LR is the learning rate, if LRDecay is on, it gets halved 
+       every 20th epoch. 
+       """
            
-           #TODO!!! add possibility of inputting weights, so you cand do additional trainng on pretrained weights!
+       #TODO!!! add possibility of inputting weights, so you can do additional training on pretrained weights!
     #parameter setting
     actAndLossDict = {'relu':(relu, reluPrime), 'sigmoid':(sigmoid, sigmoidPrime), 'softmax':(softmax, softmaxPrime), 'MSE': (MSELoss, MSELossPrime), 'cce':(CategoricalCrossEntropy, CategoricalCrossEntropyPrime)}
     (activationFun, activationFunPrime) = actAndLossDict[activationFun]
@@ -185,9 +190,9 @@ def training(X_train, Y_train, list_of_layer_sizes, epochs, LR, LRdecay=True, ac
    
     
     #setup for batch learning
-    L = int(len(X_train)/30)
-    batch_size = 30 ## change this if you want batches
-    batches = L #==len(X_train),  change this if you want batches
+    L = len(X_train)
+    #batch_size = 1 #30 ## change this if you want batches
+    batches = int(L/batch_size) #==len(X_train),  change this if you want batches
     #
     for ep in range(epochs):
         loss = 0
@@ -222,7 +227,7 @@ def training(X_train, Y_train, list_of_layer_sizes, epochs, LR, LRdecay=True, ac
                     batch_updates[upd] = sum(i)
                     upd = upd+1
             #now se avg updates for each weight?
-            updates = [ bbuu/batch_size for bbuu in batch_updates] ## TODO: you're not supposed to justdivide by batch size,sinze last batch might be smaller
+            updates = [ bbuu/batch_size for bbuu in batch_updates] ## TODO: you're not supposed to justdivide by batch size,since last batch might be smaller
             #how does batch learning really work för fan?!
             #print(lossFun(finalOut, origInput))
     
@@ -230,6 +235,8 @@ def training(X_train, Y_train, list_of_layer_sizes, epochs, LR, LRdecay=True, ac
             if LRdecay and (ep+1)%10==0:
                 LR = LR*0.5
             weights = update_weights(weights, updates, LR)
+            #print(updates[1].shape)
+            #print([np.max(updates[i]) for i in range(4)])
             #print("weights updated for: (", np.min([np.min(updt) for updt in updates]), ", ", np.max([np.max(updt) for updt in updates]), ") \n" )
         
         epoch_losses[ep] = (loss/len(X_train))
@@ -270,7 +277,7 @@ def testa(x_test, y_test, weights, lossFunk, activationFun, lastActivation, verb
                
         
 
-def plotExamples(trueOut, myOut, loss, howmany, showloss=True, save=False):
+def plotExamples(trueOut, myOut, loss, howmany, showloss=True, save=False, filenamn='rezultatiLast.png'):
     """For plotting some example results together with corresponding ground
        truths. showLoss toggles visibility of per example loss. howmany
        tells the number of examples we want to visualize (could be omitted, 
@@ -283,7 +290,11 @@ def plotExamples(trueOut, myOut, loss, howmany, showloss=True, save=False):
     rows = (howmany)//cols + ((howmany)%cols!=0)
     cols,rows = cols*2,rows*2
     
-    fig.set_size_inches(rows*2, cols*1.5)
+    multipla = 2
+    if showloss:
+        multipla = 3
+    
+    fig.set_size_inches(cols*2, rows*multipla)
     for i in range(0, howmany):
         plt.subplot(rows,cols, 2*i+1)
         plt.imshow(trueOut[i])
@@ -295,23 +306,16 @@ def plotExamples(trueOut, myOut, loss, howmany, showloss=True, save=False):
             plt.xlabel(round(loss[i],5))
             
     if save:
-        fig.savefig('rezultati.png')
+        fig.savefig(filenamn)
         plt.close()
     return fig
 
 
 ################ Calling stuff. 
 #(x_train, y_train), (x_test, y_test) = mnist.load_data()
-
-#training(x_train[1:50], y_train[1:50], [784,250,100,250,784], 5, 0.1)
-
-
-
-
-
-
-finalWeights=training(a_train, b_train, [784,250,100,250,784], 30, 1)
-
+#finalWeights = training(x_train[1:50], y_train[1:50], [784,250,100,250,784], 5, 60, 0.1)
+#(resu, losu) = testa(x_test, x_test, finalWeights, MSELoss, relu, relu)
+#plotExamples(x_test, resu, losu, 20, True, True, 'myout.png')
 
 
 
